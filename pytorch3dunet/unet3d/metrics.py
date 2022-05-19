@@ -3,13 +3,17 @@ import importlib
 import numpy as np
 import torch
 from skimage import measure
-from skimage.metrics import adapted_rand_error, peak_signal_noise_ratio, mean_squared_error
+from skimage.metrics import (
+    adapted_rand_error,
+    mean_squared_error,
+    peak_signal_noise_ratio,
+)
 
-from pytorch3dunet.unet3d.losses import compute_per_channel_dice
-from pytorch3dunet.unet3d.seg_metrics import AveragePrecision, Accuracy
-from pytorch3dunet.unet3d.utils import get_logger, expand_as_one_hot, convert_to_numpy
+from unet3d.losses import compute_per_channel_dice
+from unet3d.seg_metrics import Accuracy, AveragePrecision
+from unet3d.utils import convert_to_numpy, expand_as_one_hot, get_logger
 
-logger = get_logger('EvalMetric')
+logger = get_logger("EvalMetric")
 
 
 class DiceCoefficient:
@@ -53,7 +57,9 @@ class MeanIoU:
         n_classes = input.size()[1]
 
         if target.dim() == 4:
-            target = expand_as_one_hot(target, C=n_classes, ignore_index=self.ignore_index)
+            target = expand_as_one_hot(
+                target, C=n_classes, ignore_index=self.ignore_index
+            )
 
         assert input.size() == target.size()
 
@@ -76,7 +82,9 @@ class MeanIoU:
                 if c in self.skip_channels:
                     continue
 
-                per_channel_iou.append(self._jaccard_index(binary_prediction[c], _target[c]))
+                per_channel_iou.append(
+                    self._jaccard_index(binary_prediction[c], _target[c])
+                )
 
             assert per_channel_iou, "All channels were ignored from the computation"
             mean_iou = torch.mean(torch.tensor(per_channel_iou))
@@ -101,7 +109,9 @@ class MeanIoU:
         """
         Computes IoU for a given target and prediction tensors
         """
-        return torch.sum(prediction & target).float() / torch.clamp(torch.sum(prediction | target).float(), min=1e-8)
+        return torch.sum(prediction & target).float() / torch.clamp(
+            torch.sum(prediction | target).float(), min=1e-8
+        )
 
 
 class AdaptedRandError:
@@ -136,7 +146,7 @@ class AdaptedRandError:
         def _arand_err(gt, seg):
             n_seg = len(np.unique(seg))
             if n_seg == 1:
-                return 0.
+                return 0.0
             return adapted_rand_error(gt, seg)[0]
 
         # converts input and target to numpy arrays
@@ -160,8 +170,10 @@ class AdaptedRandError:
             # xxx/skimage/metrics/_adapted_rand_error.py:70: RuntimeWarning: invalid value encountered in double_scalars
             # precision = sum_p_ij2 / sum_a2
             if n_clusters == 1:
-                logger.info('Skipping ARandError computation: only 1 label present in the ground truth')
-                per_batch_arand.append(0.)
+                logger.info(
+                    "Skipping ARandError computation: only 1 label present in the ground truth"
+                )
+                per_batch_arand.append(0.0)
                 continue
 
             # convert _input to segmentation CDHW
@@ -169,12 +181,14 @@ class AdaptedRandError:
             assert segm.ndim == 4
 
             # compute per channel arand and return the minimum value
-            per_channel_arand = [_arand_err(_target, channel_segm) for channel_segm in segm]
+            per_channel_arand = [
+                _arand_err(_target, channel_segm) for channel_segm in segm
+            ]
             per_batch_arand.append(np.min(per_channel_arand))
 
         # return mean arand error
         mean_arand = torch.mean(torch.tensor(per_batch_arand))
-        logger.info(f'ARand: {mean_arand.item()}')
+        logger.info(f"ARand: {mean_arand.item()}")
         return mean_arand
 
     def input_to_segm(self, input):
@@ -195,10 +209,24 @@ class BoundaryAdaptedRandError(AdaptedRandError):
     Boundary map is thresholded, and connected components is run to get the predicted segmentation
     """
 
-    def __init__(self, thresholds=None, use_last_target=True, ignore_index=None, input_channel=None, invert_pmaps=True,
-                 save_plots=False, plots_dir='.', **kwargs):
-        super().__init__(use_last_target=use_last_target, ignore_index=ignore_index, save_plots=save_plots,
-                         plots_dir=plots_dir, **kwargs)
+    def __init__(
+        self,
+        thresholds=None,
+        use_last_target=True,
+        ignore_index=None,
+        input_channel=None,
+        invert_pmaps=True,
+        save_plots=False,
+        plots_dir=".",
+        **kwargs,
+    ):
+        super().__init__(
+            use_last_target=use_last_target,
+            ignore_index=ignore_index,
+            save_plots=save_plots,
+            plots_dir=plots_dir,
+            **kwargs,
+        )
 
         if thresholds is None:
             thresholds = [0.3, 0.4, 0.5, 0.6]
@@ -231,10 +259,19 @@ class BoundaryAdaptedRandError(AdaptedRandError):
 
 
 class GenericAdaptedRandError(AdaptedRandError):
-    def __init__(self, input_channels, thresholds=None, use_last_target=True, ignore_index=None, invert_channels=None,
-                 **kwargs):
+    def __init__(
+        self,
+        input_channels,
+        thresholds=None,
+        use_last_target=True,
+        ignore_index=None,
+        invert_channels=None,
+        **kwargs,
+    ):
 
-        super().__init__(use_last_target=use_last_target, ignore_index=ignore_index, **kwargs)
+        super().__init__(
+            use_last_target=use_last_target, ignore_index=ignore_index, **kwargs
+        )
         assert isinstance(input_channels, list) or isinstance(input_channels, tuple)
         self.input_channels = input_channels
         if thresholds is None:
@@ -261,18 +298,22 @@ class GenericAdaptedRandError(AdaptedRandError):
         for predictions in input:
             for th in self.thresholds:
                 # run connected components on the predicted mask; consider only 1-connectivity
-                seg = measure.label((predictions > th).astype(np.uint8), background=0, connectivity=1)
+                seg = measure.label(
+                    (predictions > th).astype(np.uint8), background=0, connectivity=1
+                )
                 segs.append(seg)
 
         return np.stack(segs)
 
 
 class GenericAveragePrecision:
-    def __init__(self, min_instance_size=None, use_last_target=False, metric='ap', **kwargs):
+    def __init__(
+        self, min_instance_size=None, use_last_target=False, metric="ap", **kwargs
+    ):
         self.min_instance_size = min_instance_size
         self.use_last_target = use_last_target
-        assert metric in ['ap', 'acc']
-        if metric == 'ap':
+        assert metric in ["ap", "acc"]
+        if metric == "ap":
             # use AveragePrecision
             self.metric = AveragePrecision()
         else:
@@ -314,7 +355,9 @@ class GenericAveragePrecision:
             # compute average precision per channel
             segs_aps = [self.metric(self._filter_instances(seg), tar) for seg in segs]
 
-            logger.info(f'Batch: {i_batch}. Max Average Precision for channel: {np.argmax(segs_aps)}')
+            logger.info(
+                f"Batch: {i_batch}. Max Average Precision for channel: {np.argmax(segs_aps)}"
+            )
             # save max AP
             batch_aps.append(np.max(segs_aps))
             i_batch += 1
@@ -345,8 +388,17 @@ class BlobsAveragePrecision(GenericAveragePrecision):
     Computes Average Precision given foreground prediction and ground truth instance segmentation.
     """
 
-    def __init__(self, thresholds=None, metric='ap', min_instance_size=None, input_channel=0, **kwargs):
-        super().__init__(min_instance_size=min_instance_size, use_last_target=True, metric=metric)
+    def __init__(
+        self,
+        thresholds=None,
+        metric="ap",
+        min_instance_size=None,
+        input_channel=0,
+        **kwargs,
+    ):
+        super().__init__(
+            min_instance_size=min_instance_size, use_last_target=True, metric=metric
+        )
         if thresholds is None:
             thresholds = [0.4, 0.5, 0.6, 0.7, 0.8]
         assert isinstance(thresholds, list)
@@ -370,8 +422,10 @@ class BlobsBoundaryAveragePrecision(GenericAveragePrecision):
     Segmentation mask is computed as (P_mask - P_boundary) > th followed by a connected component
     """
 
-    def __init__(self, thresholds=None, metric='ap', min_instance_size=None, **kwargs):
-        super().__init__(min_instance_size=min_instance_size, use_last_target=True, metric=metric)
+    def __init__(self, thresholds=None, metric="ap", min_instance_size=None, **kwargs):
+        super().__init__(
+            min_instance_size=min_instance_size, use_last_target=True, metric=metric
+        )
         if thresholds is None:
             thresholds = [0.3, 0.4, 0.5, 0.6, 0.7]
         assert isinstance(thresholds, list)
@@ -394,7 +448,9 @@ class BoundaryAveragePrecision(GenericAveragePrecision):
     Computes Average Precision given boundary prediction and ground truth instance segmentation.
     """
 
-    def __init__(self, thresholds=None, min_instance_size=None, input_channel=0, **kwargs):
+    def __init__(
+        self, thresholds=None, min_instance_size=None, input_channel=0, **kwargs
+    ):
         super().__init__(min_instance_size=min_instance_size, use_last_target=True)
         if thresholds is None:
             thresholds = [0.3, 0.4, 0.5, 0.6]
@@ -406,7 +462,11 @@ class BoundaryAveragePrecision(GenericAveragePrecision):
         input = input[self.input_channel]
         segs = []
         for th in self.thresholds:
-            seg = measure.label(np.logical_not(input > th).astype(np.uint8), background=0, connectivity=1)
+            seg = measure.label(
+                np.logical_not(input > th).astype(np.uint8),
+                background=0,
+                connectivity=1,
+            )
             segs.append(seg)
         return np.stack(segs)
 
@@ -445,11 +505,11 @@ def get_evaluation_metric(config):
     """
 
     def _metric_class(class_name):
-        m = importlib.import_module('pytorch3dunet.unet3d.metrics')
+        m = importlib.import_module("unet3d.metrics")
         clazz = getattr(m, class_name)
         return clazz
 
-    assert 'eval_metric' in config, 'Could not find evaluation metric configuration'
-    metric_config = config['eval_metric']
-    metric_class = _metric_class(metric_config['name'])
+    assert "eval_metric" in config, "Could not find evaluation metric configuration"
+    metric_config = config["eval_metric"]
+    metric_class = _metric_class(metric_config["name"])
     return metric_class(**metric_config)

@@ -74,7 +74,7 @@ loaders:
   train:
     # path to the training datasets
     file_paths:
-      - PATH_TO_TRAIN_DIR
+      - /Users/borismeinardus/Aneurysm-Detection/data/3DUnet_training/train
 
     # SliceBuilder configuration, i.e. how to iterate over the input volume patch-by-patch
     slice_builder:
@@ -128,7 +128,7 @@ loaders:
   val:
     # path to the val datasets
     file_paths:
-      - PATH_TO_VAL_DIR
+      - /Users/borismeinardus/Aneurysm-Detection/data/3DUnet_training/val
 
     # SliceBuilder configuration, i.e. how to iterate over the input volume patch-by-patch
     slice_builder:

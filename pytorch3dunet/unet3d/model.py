@@ -1,8 +1,12 @@
 import torch.nn as nn
 
-from pytorch3dunet.unet3d.buildingblocks import DoubleConv, ExtResNetBlock, create_encoders, \
-    create_decoders
-from pytorch3dunet.unet3d.utils import number_of_features_per_level, get_class
+from unet3d.buildingblocks import (
+    DoubleConv,
+    ExtResNetBlock,
+    create_decoders,
+    create_encoders,
+)
+from unet3d.utils import get_class, number_of_features_per_level
 
 
 class Abstract3DUNet(nn.Module):
@@ -35,9 +39,22 @@ class Abstract3DUNet(nn.Module):
         conv_padding (int or tuple): add zero-padding added to all three sides of the input
     """
 
-    def __init__(self, in_channels, out_channels, final_sigmoid, basic_module, f_maps=64, layer_order='gcr',
-                 num_groups=8, num_levels=4, is_segmentation=True, conv_kernel_size=3, pool_kernel_size=2,
-                 conv_padding=1, **kwargs):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        final_sigmoid,
+        basic_module,
+        f_maps=64,
+        layer_order="gcr",
+        num_groups=8,
+        num_levels=4,
+        is_segmentation=True,
+        conv_kernel_size=3,
+        pool_kernel_size=2,
+        conv_padding=1,
+        **kwargs
+    ):
         super(Abstract3DUNet, self).__init__()
 
         if isinstance(f_maps, int):
@@ -47,12 +64,27 @@ class Abstract3DUNet(nn.Module):
         assert len(f_maps) > 1, "Required at least 2 levels in the U-Net"
 
         # create encoder path
-        self.encoders = create_encoders(in_channels, f_maps, basic_module, conv_kernel_size, conv_padding, layer_order,
-                                        num_groups, pool_kernel_size)
+        self.encoders = create_encoders(
+            in_channels,
+            f_maps,
+            basic_module,
+            conv_kernel_size,
+            conv_padding,
+            layer_order,
+            num_groups,
+            pool_kernel_size,
+        )
 
         # create decoder path
-        self.decoders = create_decoders(f_maps, basic_module, conv_kernel_size, conv_padding, layer_order, num_groups,
-                                        upsample=True)
+        self.decoders = create_decoders(
+            f_maps,
+            basic_module,
+            conv_kernel_size,
+            conv_padding,
+            layer_order,
+            num_groups,
+            upsample=True,
+        )
 
         # in the last layer a 1×1 convolution reduces the number of output
         # channels to the number of labels
@@ -104,19 +136,32 @@ class UNet3D(Abstract3DUNet):
     Uses `DoubleConv` as a basic_module and nearest neighbor upsampling in the decoder
     """
 
-    def __init__(self, in_channels, out_channels, final_sigmoid=True, f_maps=64, layer_order='gcr',
-                 num_groups=8, num_levels=4, is_segmentation=True, conv_padding=1, **kwargs):
-        super(UNet3D, self).__init__(in_channels=in_channels,
-                                     out_channels=out_channels,
-                                     final_sigmoid=final_sigmoid,
-                                     basic_module=DoubleConv,
-                                     f_maps=f_maps,
-                                     layer_order=layer_order,
-                                     num_groups=num_groups,
-                                     num_levels=num_levels,
-                                     is_segmentation=is_segmentation,
-                                     conv_padding=conv_padding,
-                                     **kwargs)
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        final_sigmoid=True,
+        f_maps=64,
+        layer_order="gcr",
+        num_groups=8,
+        num_levels=4,
+        is_segmentation=True,
+        conv_padding=1,
+        **kwargs
+    ):
+        super(UNet3D, self).__init__(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            final_sigmoid=final_sigmoid,
+            basic_module=DoubleConv,
+            f_maps=f_maps,
+            layer_order=layer_order,
+            num_groups=num_groups,
+            num_levels=num_levels,
+            is_segmentation=is_segmentation,
+            conv_padding=conv_padding,
+            **kwargs
+        )
 
 
 class ResidualUNet3D(Abstract3DUNet):
@@ -127,19 +172,32 @@ class ResidualUNet3D(Abstract3DUNet):
     Since the model effectively becomes a residual net, in theory it allows for deeper UNet.
     """
 
-    def __init__(self, in_channels, out_channels, final_sigmoid=True, f_maps=64, layer_order='gcr',
-                 num_groups=8, num_levels=5, is_segmentation=True, conv_padding=1, **kwargs):
-        super(ResidualUNet3D, self).__init__(in_channels=in_channels,
-                                             out_channels=out_channels,
-                                             final_sigmoid=final_sigmoid,
-                                             basic_module=ExtResNetBlock,
-                                             f_maps=f_maps,
-                                             layer_order=layer_order,
-                                             num_groups=num_groups,
-                                             num_levels=num_levels,
-                                             is_segmentation=is_segmentation,
-                                             conv_padding=conv_padding,
-                                             **kwargs)
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        final_sigmoid=True,
+        f_maps=64,
+        layer_order="gcr",
+        num_groups=8,
+        num_levels=5,
+        is_segmentation=True,
+        conv_padding=1,
+        **kwargs
+    ):
+        super(ResidualUNet3D, self).__init__(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            final_sigmoid=final_sigmoid,
+            basic_module=ExtResNetBlock,
+            f_maps=f_maps,
+            layer_order=layer_order,
+            num_groups=num_groups,
+            num_levels=num_levels,
+            is_segmentation=is_segmentation,
+            conv_padding=conv_padding,
+            **kwargs
+        )
 
 
 class UNet2D(Abstract3DUNet):
@@ -147,25 +205,38 @@ class UNet2D(Abstract3DUNet):
     Just a standard 2D Unet. Arises naturally by specifying conv_kernel_size=(1, 3, 3), pool_kernel_size=(1, 2, 2).
     """
 
-    def __init__(self, in_channels, out_channels, final_sigmoid=True, f_maps=64, layer_order='gcr',
-                 num_groups=8, num_levels=4, is_segmentation=True, conv_padding=1, **kwargs):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        final_sigmoid=True,
+        f_maps=64,
+        layer_order="gcr",
+        num_groups=8,
+        num_levels=4,
+        is_segmentation=True,
+        conv_padding=1,
+        **kwargs
+    ):
         if conv_padding == 1:
             conv_padding = (0, 1, 1)
-        super(UNet2D, self).__init__(in_channels=in_channels,
-                                     out_channels=out_channels,
-                                     final_sigmoid=final_sigmoid,
-                                     basic_module=DoubleConv,
-                                     f_maps=f_maps,
-                                     layer_order=layer_order,
-                                     num_groups=num_groups,
-                                     num_levels=num_levels,
-                                     is_segmentation=is_segmentation,
-                                     conv_kernel_size=(1, 3, 3),
-                                     pool_kernel_size=(1, 2, 2),
-                                     conv_padding=conv_padding,
-                                     **kwargs)
+        super(UNet2D, self).__init__(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            final_sigmoid=final_sigmoid,
+            basic_module=DoubleConv,
+            f_maps=f_maps,
+            layer_order=layer_order,
+            num_groups=num_groups,
+            num_levels=num_levels,
+            is_segmentation=is_segmentation,
+            conv_kernel_size=(1, 3, 3),
+            pool_kernel_size=(1, 2, 2),
+            conv_padding=conv_padding,
+            **kwargs
+        )
 
 
 def get_model(model_config):
-    model_class = get_class(model_config['name'], modules=['pytorch3dunet.unet3d.model'])
+    model_class = get_class(model_config["name"], modules=["unet3d.model"])
     return model_class(**model_config)
