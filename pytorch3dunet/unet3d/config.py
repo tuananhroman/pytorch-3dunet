@@ -9,14 +9,14 @@ logger = utils.get_logger("ConfigLoader")
 
 
 def load_config():
-    # parser = argparse.ArgumentParser(description="UNet3D")
-    # parser.add_argument(
-    #     "--config", type=str, help="Path to the YAML config file", required=True
-    # )
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="UNet3D")
+    parser.add_argument(
+        "--config", type=str, help="Path to the YAML config file", required=True
+    )
+    args = parser.parse_args()
     config = yaml.safe_load(
         open(
-            "/Users/borismeinardus/Aneurysm-Detection/externals/pytorch3dunet/resources/3DUnet_confocal_boundary/train_config.yml",
+            args.config,
             "r",
         )
     )
