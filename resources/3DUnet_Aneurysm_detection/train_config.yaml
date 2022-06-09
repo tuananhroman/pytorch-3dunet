@@ -12,18 +12,20 @@ model:
   # determines the order of operators in a single layer (crg - Conv3d+ReLU+GroupNorm)
   layer_order: gcr
   # initial number of feature maps
-  f_maps: 32
+  f_maps: [32, 64, 128, 256]
   # number of groups in the groupnorm
   num_groups: 8
   # apply element-wise nn.Sigmoid after the final 1x1x1 convolution, otherwise apply nn.Softmax
   final_sigmoid: true
+  # if True applies the final normalization layer (sigmoid or softmax), otherwise the networks returns the output from the final convolution layer; use False for regression problems, e.g. de-noising
+  is_segmentation: true
 # loss function to be used during training
 loss:
-  name: BCEDiceLoss
-  # a target value that is ignored and does not contribute to the input gradient
-  ignore_index: null
-  # skip the last channel in the target (i.e. when last channel contains data not relevant for the loss)
+  # use BCE loss for training
+  name: BCEWithLogitsLoss
+  # skip last channel in the target containing the labeled nuclei instances
   skip_last_target: true
+# optimizer configuration
 optimizer:
   # initial learning rate
   learning_rate: 0.0002
@@ -31,48 +33,58 @@ optimizer:
   weight_decay: 0.00001
 # evaluation metric
 eval_metric:
-  # use AdaptedRandError metric
-  name: BoundaryAdaptedRandError
-  # probability maps threshold
-  threshold: 0.4
-  # use the last target channel to compute the metric
-  use_last_target: true
-  # use only the first channel for computing the metric
-  use_first_input: true
+  # use average precision metric
+  name: BlobsAveragePrecision
+  # values on which the nuclei probability maps will be thresholded for AP computation
+  thresholds: [0.4, 0.5, 0.6, 0.7, 0.8]
+  metric: 'ap'
 lr_scheduler:
+  # reduce learning rate when evaluation metric plateaus
   name: ReduceLROnPlateau
-  # make sure to use the 'min' mode cause lower AdaptedRandError is better
-  mode: min
-  factor: 0.5
-  patience: 30
+  # use 'max' if eval_score_higher_is_better=True, 'min' otherwise
+  mode: max
+  # factor by which learning rate will be reduced
+  factor: 0.2
+  # number of *validation runs* with no improvement after which learning rate will be reduced
+  patience: 8
 trainer:
-  # model with lower eval score is considered better
-  eval_score_higher_is_better: False
   # path to the checkpoint directory
   checkpoint_dir: CHECKPOINT_DIR
   # path to latest checkpoint; if provided the training will be resumed from that checkpoint
   resume: null
   # path to the best_checkpoint.pytorch; to be used for fine-tuning the model with additional ground truth
+  # make sure to decrease the learning rate in the optimizer config accordingly
   pre_trained: null
   # how many iterations between validations
   validate_after_iters: 1000
   # how many iterations between tensorboard logging
-  log_after_iters: 500
+  log_after_iters: 25
   # max number of epochs
-  max_num_epochs: 1000
+  max_num_epochs: 200
   # max number of iterations
-  max_num_iterations: 150000
+  max_num_iterations: 60000
+  # model with higher eval score is considered better
+  eval_score_higher_is_better: True
+
 # Configure training and validation loaders
 loaders:
+  # class of the HDF5 dataset, currently StandardHDF5Dataset and LazyHDF5Dataset are supported.
+  # When using LazyHDF5Dataset make sure to set `num_workers = 1`, due to a bug in h5py which corrupts the data
+  # when reading from multiple threads.
+  dataset: StandardHDF5Dataset
+  # batch dimension; if number of GPUs is N > 1, then a batch_size of N * batch_size will automatically be taken for DataParallel
+  batch_size: 1
   # how many subprocesses to use for data loading
   num_workers: 8
   # path to the raw data within the H5
-  raw_internal_path: /raw
-  # path to the the label data withtin the H5
-  label_internal_path: /label
+  raw_internal_path: raw
+  # path to the the label data within the H5
+  label_internal_path: label
+  # path to the pixel-wise weight map withing the H5 if present
+  weight_internal_path: null
   # configuration of the train loader
   train:
-    # path to the training datasets
+    # paths to the training datasets
     file_paths:
       - /home/borismeinardus/Aneurysm-Detection/data/h5/set_1/train
 
@@ -80,32 +92,30 @@ loaders:
     slice_builder:
       name: FilterSliceBuilder
       # train patch size given to the network (adapt to fit in your GPU mem, generally the bigger patch the better)
-      patch_shape: [80, 170, 170]
+      patch_shape: [170, 170, 80]
       # train stride between patches
-      stride_shape: [20, 40, 40]
+      stride_shape: [40, 40, 20]
       # minimum volume of the labels in the patch
-      threshold: 0.6
+      threshold: 0.01
       # probability of accepting patches which do not fulfil the threshold criterion
       slack_acceptance: 0.01
 
     transformer:
       raw:
+        # subtract mean and divide by std dev
         - name: Standardize
+        # randomly flips the volume in one of the axis
         - name: RandomFlip
+        # randomly rotates the volume with 90 deg across a randomly chosen plane
         - name: RandomRotate90
         - name: RandomRotate
           # rotate only in ZY plane due to anisotropy
           axes: [[2, 1]]
-          angle_spectrum: 45
+          # rotates by choosing random angle from [-30, 30] deg
+          angle_spectrum: 30
           mode: reflect
         - name: ElasticDeformation
           spline_order: 3
-        - name: GaussianBlur3D
-          execution_probability: 0.5
-        - name: AdditiveGaussianNoise
-          execution_probability: 0.2
-        - name: AdditivePoissonNoise
-          execution_probability: 0.2
         - name: ToTensor
           expand_dims: true
       label:
@@ -114,19 +124,23 @@ loaders:
         - name: RandomRotate
           # rotate only in ZY plane due to anisotropy
           axes: [[2, 1]]
-          angle_spectrum: 45
+          angle_spectrum: 30
           mode: reflect
         - name: ElasticDeformation
           spline_order: 0
-        - name: StandardLabelToBoundary
-          # append original ground truth labels to the last channel (to be able to compute the eval metric)
-          append_label: true
+          # convert target volume to binary mask
+        - name: BlobsToMask
+          # append ground truth labels in the last channel of the target for evaluation metric computation
+          append_label: false
+          # if 'true' appends boundary mask as a 2nd channel of the target; boundaries are computed using the 'find_boundaries()' function from skimage
+          # learning the boundaries as a 2nd objective sometimes helps with the nuclei mask prediction
+          boundary: false
         - name: ToTensor
           expand_dims: false
 
   # configuration of the val loader
   val:
-    # path to the val datasets
+    # paths to the val datasets
     file_paths:
       - /home/borismeinardus/Aneurysm-Detection/data/h5/set_1/val
 
@@ -134,11 +148,11 @@ loaders:
     slice_builder:
       name: FilterSliceBuilder
       # train patch size given to the network (adapt to fit in your GPU mem, generally the bigger patch the better)
-      patch_shape: [80, 170, 170]
+      patch_shape: [256, 256, 220]
       # train stride between patches
-      stride_shape: [20, 40, 40]
+      stride_shape: [256, 256, 220]
       # minimum volume of the labels in the patch
-      threshold: 0.6
+      threshold: 0.01
       # probability of accepting patches which do not fulfil the threshold criterion
       slack_acceptance: 0.01
 
@@ -149,7 +163,8 @@ loaders:
         - name: ToTensor
           expand_dims: true
       label:
-        - name: StandardLabelToBoundary
-          append_label: true
+        - name: BlobsToMask
+          append_label: false
+          boundary: false
         - name: ToTensor
           expand_dims: false
