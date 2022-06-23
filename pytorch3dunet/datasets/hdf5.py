@@ -119,6 +119,9 @@ class AbstractHDF5Dataset(ConfigDataset):
         if ds.ndim == 2:
             # expand dims if 2d
             ds = np.expand_dims(ds, axis=0)
+
+        # reshape ds from x, y, z to z, y, x
+        ds = np.moveaxis(ds, -1, 0)
         return ds
 
     def __getitem__(self, idx):

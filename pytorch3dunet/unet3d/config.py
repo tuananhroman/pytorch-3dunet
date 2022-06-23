@@ -16,8 +16,8 @@ def load_config():
     # args = parser.parse_args()
     config = yaml.safe_load(
         open(
-            # "/home/borismeinardus/Aneurysm-Detection/externals/pytorch3dunet/resources/3DUnet_Aneurysm_detection/train_config.yaml",
-            "/home/borismeinardus/Aneurysm-Detection/externals/pytorch3dunet/resources/3DUnet_Aneurysm_detection/test_config.yaml",
+            "/home/borismeinardus/Aneurysm-Detection/externals/pytorch3dunet/resources/3DUnet_Aneurysm_detection/train_config.yaml",
+            # "/home/borismeinardus/Aneurysm-Detection/externals/pytorch3dunet/resources/3DUnet_Aneurysm_detection/test_config.yaml",
             "r",
         )
     )
