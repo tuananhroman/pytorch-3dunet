@@ -4,7 +4,7 @@
 # Download validation data from: https://osf.io/xp5uf/
 # Download test data from: https://osf.io/8jz7e/
 model:
-  name: UNet3D # UNet3D
+  name: UNet3D
   # number of input channels to the model
   in_channels: 1
   # number of output channels
@@ -62,7 +62,7 @@ trainer:
   # how many iterations between tensorboard logging
   log_after_iters: 25
   # max number of epochs
-  max_num_epochs: 400 # 200
+  max_num_epochs: 100 # 200
   # max number of iterations
   max_num_iterations: 60000
   # model with higher eval score is considered better
@@ -150,7 +150,7 @@ loaders:
     slice_builder:
       name: FilterSliceBuilder
       # train patch size given to the network (adapt to fit in your GPU mem, generally the bigger patch the better)
-      patch_shape: [150, 200, 200]
+      patch_shape: [80, 170, 170]
       # train stride between patches
       stride_shape: [25, 30, 30]
       # minimum volume of the labels in the patch
